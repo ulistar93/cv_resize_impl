@@ -10,8 +10,12 @@ int main() {
   int imgH = img.size().height;
   int faceSx = 541, faceSy = 199;
   int faceEx = 714, faceEy = 405;
-  int roiSx = 368, roiSy = 43;
-  int roiEx = 886, roiEy = 561;
+  int roiSx = 368, roiEx = 886, roiSy = 43, roiEy = 561; // 518 x 518
+  //int roiSx = 467, roiEx = 787, roiSy = 142, roiEy = 462; // 320 x 320
+  //int roiSx = 467, roiEx = 786, roiSy = 142, roiEy = 461; // 319 x 319
+  //int roiSx = 467, roiEx = 788, roiSy = 142, roiEy = 463; // 321 x 321
+  //int roiSx = 612, roiEx = 644, roiSy = 286, roiEy = 318; // 32 x 32
+  //int roiSx = 612, roiEx = 617, roiSy = 286, roiEy = 291; // 5 x 5
   int roiW = roiEx - roiSx;
   int roiH = roiEy - roiSy;
   assert(roiW == roiH);
@@ -56,7 +60,7 @@ int main() {
   int cn = 1; //channel number
   float fx, fy;
   const int ksize = 2; // 2 = refer 2 point (INTER_LINEAR)
-  int width = dW * cn;
+  int xmin = 0, xmax = dW, width = dW * cn;
 
   unsigned char* _buffer = (unsigned char*)malloc((width + dH) * (sizeof(int) + sizeof(short) * ksize));
   //memset(_buffer, 0, (width + dH) * (sizeof(int) + sizeof(short) * ksize));
@@ -71,11 +75,18 @@ int main() {
 	  sx = (int)floor(fx);
 	  fx -= sx;
 
-	  if (sx < 0) fx = 0, sx = 0;
-	  if (sx >= sW - 1) fx = 0, sx = sW - 1;
+      if (sx < 0) {
+          xmin = dx + 1; // xmin don't use later, since src point refer S0[xofs[dx]] and S0[xofs[dx]+1] only
+          fx = 0, sx = 0;
+      }
+      if (sx >= sW - 1) {
+          xmax = std::min(xmax, dx);
+          fx = 0, sx = sW - 1;
+      }
 
 	  for (k = 0, sx *= cn; k < cn; k++)
-		  xofs[dx * cn + k] = sx + k;
+        xofs[dx * cn + k] = sx + k;
+      //xofs[dx] = sx; // cn=1
 	  cbuf[0] = 1.f - fx;
 	  cbuf[1] = fx;
 	  for (k = 0; k < ksize; k++)
@@ -123,9 +134,13 @@ int main() {
       int* D0 = rows[0], * D1 = rows[1];
       if (k0 < ksize) {
           //hresize((const T**)(srows + k0), (WT**)(rows + k0), ksize - k0, xofs, (const AT*)(alpha), ssize.width, dsize.width, cn, xmin, xmax);
-          for (dx = 0; dx < width; dx++) {
+          for (dx = 0; dx < xmax; dx++) {
               D0[dx] = S0[xofs[dx]] * alpha[dx * 2] + S0[xofs[dx] + 1] * alpha[dx * 2 + 1];
               D1[dx] = S1[xofs[dx]] * alpha[dx * 2] + S1[xofs[dx] + 1] * alpha[dx * 2 + 1];
+          }
+          for (; dx < width; dx++) {
+              D0[dx] = S0[xofs[dx]] * INTER_RESIZE_COEF_SCALE;
+              D1[dx] = S1[xofs[dx]] * INTER_RESIZE_COEF_SCALE;
           }
       }
       // vresize( (const WT**)rows, (T*)(dst.data + dst.step*dy), beta, dsize.width );
